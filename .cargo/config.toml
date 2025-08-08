@@ -1,0 +1,123 @@
+[env]
+AOC_YEAR = "" # "2015"
+
+[alias]
+today = "run --quiet --release --features today -- today"
+scaffold = "run --quiet --release -- scaffold"
+# rename to avoid shadowing cargo-download https://github.com/rust-lang/cargo/issues/10049 (although this issue seems questionable too)
+get = "run --quiet --release -- download"
+read = "run --quiet --release -- read"
+solve = "run --quiet --release -- solve"
+all = "run --quiet --release -- all"
+time = "run --quiet --release -- time --store"
+
+"@n" = "next_day"
+"@s" = "solve_n"
+"@s1" = "submit_p1"
+"@s2" = "submit_p2"
+"@t" = "test_n"
+"@t1" = "test_n _ 2"
+"@t2" = "test_n _ 1"
+
+next_day = [
+  "exec",
+  "SHELL=zsh",
+  "-sr",
+  '''n=$1; if ! ((n)); then n=1; while [[ -e data/puzzles/${(l:2::0:)n}.md && "$(tail -n 1 data/puzzles/${(l:2::0:)n}.md)" == \#* ]]; do ((n++)); done; fi;
+  echo Day $n;
+  src=src/bin/${(l:2::0:)n}.rs; [[ ! -e $src ]] && cargo scaffold $n --download; cargo read $n | $PAGER && code -a . $src data/puzzles/${(l:2::0:)n}.md data/inputs/${(l:2::0:)n}.txt'''
+]
+
+submit_p1 = [
+  "exec",
+  "SHELL=zsh",
+  "-s",
+  '''n=$1; if ! ((n)); then n=1; while [[ -e data/puzzles/${(l:2::0:)n}.md && "$(tail -n 1 data/puzzles/${(l:2::0:)n}.md)" == \#* ]]; do ((n++)); done; fi;
+  echo Day $n
+  cargo solve $n --submit 1 | tee /dev/tty | grep -q "right answer!" &&
+  cargo get $n -P && cargo next_day $n &> /dev/null'''
+]
+
+submit_p2 = [
+  "exec",
+  "SHELL=zsh",
+  "-s",
+  '''n=$1; if ! ((n)); then n=1; while [[ -e data/puzzles/${(l:2::0:)n}.md && "$(tail -n 1 data/puzzles/${(l:2::0:)n}.md)" == \#* ]]; do ((n++)); done; fi;
+  echo Day $n
+  cargo solve $n --submit 2 | tee /dev/tty | grep -q "right answer!" &&
+  cargo get $n -P &&
+  ex -sc '$d|x' data/puzzles/${(l:2::0:)n}.md && echo \#complete >> data/puzzles/${(l:2::0:)n}.md && cargo next_day'''
+]
+
+"@refresh" = [
+  "exec",
+  "SHELL=zsh",
+  "-s",
+  '''n=$1; if ! ((n)); then n=1; while [[ -e data/puzzles/${(l:2::0:)n}.md && "$(tail -n 1 data/puzzles/${(l:2::0:)n}.md)" == \#* ]]; do ((n++)); done; fi;
+  cargo get $n'''
+]
+
+solve_n = [
+  "exec",
+  "SHELL=zsh",
+  "-s",
+  '''n=$1; if ! ((n)); then n=1; while [[ -e data/puzzles/${(l:2::0:)n}.md && "$(tail -n 1 data/puzzles/${(l:2::0:)n}.md)" == \#* ]]; do ((n++)); done; fi;
+  echo Day $n
+  cargo solve $n
+  printf "Record? [y/N] "
+  read -r ans
+  [[ -z $ans || $ans != [Yy]* ]] && return
+  cargo time $n'''
+]
+
+test_n = [
+  "exec",
+  "SHELL=zsh",
+  "-s",
+  '''n=$1; if ! ((n)); then n=1; while [[ -e data/puzzles/${(l:2::0:)n}.md && "$(tail -n 1 data/puzzles/${(l:2::0:)n}.md)" == \#* ]]; do ((n++)); done; fi;
+  echo Day $n
+  [[ $2 == 1 ]] && part=part_one
+  [[ $2 == 2 ]] && part=part_two
+  cargo test --bin ${(l:2::0:)n} $part -- --no-capture'''
+]
+
+"@secrets" = [
+  "exec",
+  "SHELL=zsh",
+  "-s",
+'''
+# Check current repo
+REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
+if [[ -z "$REPO" ]]; then
+    echo "Not inside a GitHub repository or gh CLI not authenticated."
+    exit 1
+fi
+
+read "AOC_USER_ID?Enter your AOC_USER_ID: "
+
+DEFAULT_FILE="${HOME}/.adventofcode.session"
+DEFAULT_SESSION_VALUE="${ADVENT_OF_CODE_SESSION:-}"
+if [[ -f "$DEFAULT_FILE" ]]; then
+    DEFAULT_SESSION_VALUE=$(<"$DEFAULT_FILE")
+fi
+
+read "AOC_SESSION?Enter your AOC_SESSION ($DEFAULT_SESSION_VALUE): "
+AOC_SESSION="${AOC_SESSION:-$DEFAULT_SESSION_VALUE}"
+
+if [[ "$AOC_SESSION" != "$DEFAULT_SESSION_VALUE" ]]; then
+    read "REPLY?Write session to $DEFAULT_FILE? (y/N): "
+    if [[ "$REPLY" =~ ^[Yy]$ ]]; then
+        echo "$AOC_SESSION" >| "$DEFAULT_FILE"
+        echo "Saved session to $DEFAULT_FILE"
+    fi
+fi
+
+gh secret set AOC_USER_ID --body "$AOC_USER_ID"
+gh secret set AOC_SESSION --body "$AOC_SESSION"
+
+echo "Secrets set."
+'''
+]
+
+# [build]
+# rustflags = ["-L", "/opt/homebrew/lib"]
